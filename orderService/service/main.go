@@ -19,6 +19,10 @@ const orderBatchSize = 3
 
 var orderMap = make(map[string]*pb.Order, 0)
 
+type wrappedStream struct {
+	grpc.ServerStream
+}
+
 type server struct {
 	pb.UnimplementedOrderManagementServer
 	orderMap map[string]*pb.Order
@@ -114,13 +118,51 @@ func (s *server) ProcessOrders(stream pb.OrderManagement_ProcessOrdersServer) er
 	}
 }
 
+func orderUnaryServerInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	log.Println("*** [Server Unary Interceptor] ", info.FullMethod)
+	log.Printf("Before handling the request: %s", req)
+
+	m, err := handler(ctx, req)
+	if err != nil {
+		log.Printf("Error handling the request: %s", err)
+	}
+	log.Printf("After handling the request: %s", m)
+	return m, err
+}
+
+func (w *wrappedStream) RecvMsg(m interface{}) error {
+	log.Printf("*** [Server Stream Interceptor Wrapper] Received message: %T", m)
+	return w.ServerStream.RecvMsg(m)
+}
+
+func (w *wrappedStream) SendMsg(m interface{}) error {
+	log.Printf("*** [Server Stream Interceptor Wrapper] Sending message: %T", m)
+	return w.ServerStream.SendMsg(m)
+}
+
+func newWrappedStream(s grpc.ServerStream) *wrappedStream {
+	return &wrappedStream{s}
+}
+
+func orederStreamServerInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	log.Println("*** [Server Stream Interceptor] ", info.FullMethod)
+	err := handler(srv, newWrappedStream(stream))
+	if err != nil {
+		log.Printf("RPC error %v", err)
+	}
+	return err
+}
+
 func main() {
 	initSampleData()
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	s := grpc.NewServer()
+	s := grpc.NewServer(
+		grpc.UnaryInterceptor(orderUnaryServerInterceptor),
+		grpc.StreamInterceptor(orederStreamServerInterceptor),
+	)
 	pb.RegisterOrderManagementServer(s, &server{})
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

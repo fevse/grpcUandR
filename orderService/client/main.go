@@ -15,7 +15,11 @@ import (
 const addr = "localhost:50051"
 
 func main() {
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(orderUnaryClientInterceptor),
+		grpc.WithStreamInterceptor(clientStreamInterceptor),
+	)
+
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -118,4 +122,43 @@ func asncClientBidirectionalRPC(streamProcOrder pb.OrderManagement_ProcessOrders
 		log.Printf("Combined shipment : %v", combinedShipment.OrderList)
 	}
 	<-c
+}
+
+func orderUnaryClientInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	log.Println("Method : " + method)
+	err := invoker(ctx, method, req, reply, cc, opts...)
+
+	log.Println(reply)
+
+	return err
+}
+
+func clientStreamInterceptor(
+	ctx context.Context, desc *grpc.StreamDesc,
+	cc *grpc.ClientConn, method string,
+	streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	log.Println("*** [Clietn Stream Interceptor] ", method)
+	s, err := streamer(ctx, desc, cc, method, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return newWrappedStream(s), nil
+}
+
+type wrappedStream struct {
+	grpc.ClientStream
+}
+
+func newWrappedStream(s grpc.ClientStream) grpc.ClientStream {
+	return &wrappedStream{s}
+}
+
+func (w *wrappedStream) RecvMsg(m interface{}) error {
+	log.Printf("*** [Client Stream Interceptor] Receive a message: %T", m)
+	return w.ClientStream.RecvMsg(m)
+}
+
+func (w *wrappedStream) SendMsg(m interface{}) error {
+	log.Printf("*** [Client Stream Interceptor] Send a message: %T ", m)
+	return w.ClientStream.SendMsg(m)
 }

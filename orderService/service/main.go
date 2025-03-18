@@ -9,6 +9,7 @@ import (
 	"net"
 	pb "orderService/service/orderService"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -35,6 +36,15 @@ func (s *server) GetOrder(ctx context.Context, orderId *wrapperspb.StringValue) 
 
 func (s *server) AddOrder(ctx context.Context, order *pb.Order) (*wrapperspb.StringValue, error) {
 	orderMap[order.Id] = order
+
+	log.Println("Sleeping ...")
+	time.Sleep(time.Duration(5 * time.Second))
+
+	if ctx.Err() == context.DeadlineExceeded {
+		log.Printf("Deadline %s", ctx.Err())
+		return nil, ctx.Err()
+	}
+
 	log.Printf("Order %v added", order.Id)
 	return &wrapperspb.StringValue{Value: "Order " + order.Id + " added"}, nil
 }

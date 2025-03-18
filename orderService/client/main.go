@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -25,13 +26,16 @@ func main() {
 	}
 	defer conn.Close()
 	client := pb.NewOrderManagementClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	clientDeadline := time.Now().Add(time.Duration(2 * time.Second))
+	ctx, cancel := context.WithDeadline(context.Background(), clientDeadline)
 	defer cancel()
 
 	order1 := pb.Order{Id: "11", Items: []string{"Mooer Micro Looper"}, Destination: "Balmora", Price: 45.0}
+
 	res, err := client.AddOrder(ctx, &order1)
 	if err != nil {
-		log.Fatalf("cannot add order: %v", err)
+		got := status.Code(err)
+		log.Fatalf("Error Occured -> addOrder : %v", got)
 	}
 	if res != nil {
 		log.Print("AddOrder Response -> : ", res.Value)

@@ -26,6 +26,7 @@ func main() {
 	}
 	defer conn.Close()
 	client := pb.NewOrderManagementClient(conn)
+
 	clientDeadline := time.Now().Add(time.Duration(2 * time.Second))
 	ctx, cancel := context.WithDeadline(context.Background(), clientDeadline)
 	defer cancel()

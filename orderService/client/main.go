@@ -88,6 +88,10 @@ func main() {
 	}
 	log.Printf("Update Orders Res : %s", updateRes)
 
+	// cancel
+
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+
 	streamProcOrder, err := client.ProcessOrders(ctx)
 	if err != nil {
 		log.Fatalf("cannot process orders: %v", err)
@@ -102,31 +106,39 @@ func main() {
 		log.Fatalf("%v.Send(%v) = %v", client, "14", err)
 	}
 
-	ch := make(chan struct{})
+	ch := make(chan struct{}, 1)
 
 	go asncClientBidirectionalRPC(streamProcOrder, ch)
 	time.Sleep(1 * time.Second)
 
+	cancel()
+	log.Printf("RPC status : %s", ctx.Err())
+
 	if err := streamProcOrder.Send(&wrapperspb.StringValue{Value: "11"}); err != nil {
-		log.Fatalf("%v.Send(%v) = %v", client, "14", err)
+		log.Fatalf("%v.Send(%v) = %v", client, "11", err)
 	}
 
 	if err := streamProcOrder.CloseSend(); err != nil {
 		log.Fatal(err)
 	}
 
-	ch <- struct{}{}
+	<-ch
 }
 
 func asncClientBidirectionalRPC(streamProcOrder pb.OrderManagement_ProcessOrdersClient, c chan struct{}) {
 	for {
 		combinedShipment, errProcOrder := streamProcOrder.Recv()
-		if errProcOrder == io.EOF {
+		if errProcOrder != nil {
+			log.Printf("Error receiving message %v", errProcOrder)
 			break
+		} else {
+			if errProcOrder == io.EOF {
+				break
+			}
+			log.Printf("Combined shipment : %v", combinedShipment.OrderList)
 		}
-		log.Printf("Combined shipment : %v", combinedShipment.OrderList)
 	}
-	<-c
+	c <- struct{}{}
 }
 
 func orderUnaryClientInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {

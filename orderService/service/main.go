@@ -85,7 +85,16 @@ func (s *server) ProcessOrders(stream pb.OrderManagement_ProcessOrdersServer) er
 	batchMarker := 1
 	var combinedShipmentMap = make(map[string]*pb.CombinedShipment)
 	for {
+
+		if stream.Context().Err() == context.Canceled {
+			log.Printf(" Context Cacelled for this stream: -> %s", stream.Context().Err())
+			log.Printf("Stopped processing any more order of this stream!")
+			return stream.Context().Err()
+		}
+
 		orderId, err := stream.Recv()
+		log.Println("Reading Proc order ... ", orderId)
+
 		if err == io.EOF {
 			for _, ship := range combinedShipmentMap {
 				if err := stream.Send(ship); err != nil {

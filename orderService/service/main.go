@@ -10,7 +10,11 @@ import (
 	pb "orderService/service/orderService"
 	"strings"
 
+	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
+
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -34,19 +38,35 @@ func (s *server) GetOrder(ctx context.Context, orderId *wrapperspb.StringValue) 
 }
 
 func (s *server) AddOrder(ctx context.Context, order *pb.Order) (*wrapperspb.StringValue, error) {
-	orderMap[order.Id] = order
 
 	// Deadline example
 	// log.Println("Sleeping ...")
 	// time.Sleep(time.Duration(5 * time.Second))
 
-	if ctx.Err() == context.DeadlineExceeded {
-		log.Printf("Deadline %s", ctx.Err())
-		return nil, ctx.Err()
+	// if ctx.Err() == context.DeadlineExceeded {
+	// 	log.Printf("Deadline %s", ctx.Err())
+	// 	return nil, ctx.Err()
+	// }
+	if order.Id == "-1" {
+		log.Printf("Order ID is invalid! -> Recieved Order ID %s", order.Id)
+
+		errorStatus := status.New(codes.InvalidArgument, "Invalid information received")
+		ds, err := errorStatus.WithDetails(&epb.BadRequest_FieldViolation{
+			Field:       "ID",
+			Description: fmt.Sprintf("Order ID received is not valid %s : %s", order.Id, order.Description),
+		},
+		)
+		if err != nil {
+			return nil, errorStatus.Err()
+		}
+
+		return nil, ds.Err()
+	} else {
+		orderMap[order.Id] = order
+		log.Printf("Order %v added", order.Id)
+		return &wrapperspb.StringValue{Value: "Order " + order.Id + " added"}, nil
 	}
 
-	log.Printf("Order %v added", order.Id)
-	return &wrapperspb.StringValue{Value: "Order " + order.Id + " added"}, nil
 }
 
 func (s *server) SearchOrders(searchQuery *wrapperspb.StringValue, stream pb.OrderManagement_SearchOrdersServer) error {
@@ -182,7 +202,7 @@ func main() {
 		grpc.UnaryInterceptor(orderUnaryServerInterceptor),
 		grpc.StreamInterceptor(orederStreamServerInterceptor),
 	)
-	pb.RegisterOrderManagementServer(s, &server{})
+	pb.RegisterOrderManagementServer(s, &server{orderMap: orderMap})
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

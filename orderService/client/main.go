@@ -42,6 +42,31 @@ func main() {
 		log.Print("AddOrder Response -> : ", res.Value)
 	}
 
+	// order2 := pb.Order{Id: "-1",
+	// 	Items:       []string{"Bebida", "Arroz"},
+	// 	Destination: "Moon"}
+	// res, addOrderError := client.AddOrder(ctx, &order2)
+
+	// if addOrderError != nil {
+	// 	errorCode := status.Code(addOrderError)
+	// 	if errorCode == codes.InvalidArgument {
+	// 		log.Printf("Invalid Argument Error : %s", errorCode)
+	// 		errorStatus := status.Convert(addOrderError)
+	// 		for _, d := range errorStatus.Details() {
+	// 			switch info := d.(type) {
+	// 			case *epb.BadRequest_FieldViolation:
+	// 				log.Printf("Request Field Invalid: %s", info)
+	// 			default:
+	// 				log.Printf("Unexpected error type: %s", info)
+	// 			}
+	// 		}
+	// 	} else {
+	// 		log.Printf("Unhandled error : %s", errorCode)
+	// 	}
+	// } else {
+	// 	log.Print("AddOrder Response -> ", res.Value)
+	// }
+
 	retrievedOrder, err := client.GetOrder(ctx, &wrapperspb.StringValue{Value: "15"})
 	if err != nil {
 		log.Fatalf("cannot get order: %v", err)

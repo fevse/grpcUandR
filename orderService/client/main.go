@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	pb "orderService/client/orderService"
@@ -9,6 +10,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -41,6 +43,17 @@ func main() {
 	if res != nil {
 		log.Print("AddOrder Response -> : ", res.Value)
 	}
+
+	helloClient := hwpb.NewGreeterClient(conn)
+
+	hwcCtx, hwcCancel := context.WithTimeout(context.Background(), time.Second)
+	defer hwcCancel()
+
+	helloResponse, err := helloClient.SayHello(hwcCtx, &hwpb.HelloRequest{Name: "Check!!! Check!!!"})
+	if err != nil {
+		log.Fatalf("orderManagementClient.SayHello(_) = _, %v", err)
+	}
+	fmt.Println("Greetinf: ", helloResponse.Message)
 
 	// order2 := pb.Order{Id: "-1",
 	// 	Items:       []string{"Bebida", "Arroz"},

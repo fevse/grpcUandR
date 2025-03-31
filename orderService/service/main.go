@@ -14,6 +14,8 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	hello_pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -30,6 +32,15 @@ type wrappedStream struct {
 type server struct {
 	pb.UnimplementedOrderManagementServer
 	orderMap map[string]*pb.Order
+}
+
+type helloServer struct {
+	hello_pb.UnimplementedGreeterServer
+}
+
+func (s *helloServer) SayHello(ctx context.Context, in *hello_pb.HelloRequest) (*hello_pb.HelloReply, error) {
+	log.Printf("Greeter Service - SayHello RPC")
+	return &hello_pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
 func (s *server) GetOrder(ctx context.Context, orderId *wrapperspb.StringValue) (*pb.Order, error) {
@@ -203,6 +214,8 @@ func main() {
 		grpc.StreamInterceptor(orederStreamServerInterceptor),
 	)
 	pb.RegisterOrderManagementServer(s, &server{orderMap: orderMap})
+	hello_pb.RegisterGreeterServer(s, &helloServer{})
+	reflection.Register(s)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

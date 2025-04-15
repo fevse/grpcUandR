@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -29,19 +30,48 @@ func main() {
 	defer conn.Close()
 	client := pb.NewOrderManagementClient(conn)
 
-	clientDeadline := time.Now().Add(time.Duration(2 * time.Second))
-	ctx, cancel := context.WithDeadline(context.Background(), clientDeadline)
-	defer cancel()
+	// Metadata
+	md := metadata.Pairs(
+		"timestamp", time.Now().Format(time.StampNano),
+		"kn", "vn",
+	)
+	mdCtx := metadata.NewOutgoingContext(context.Background(), md)
+
+	ctxA := metadata.AppendToOutgoingContext(mdCtx, "k1", "v1", "k1", "v2", "k2", "v3")
+
+	var header, trailer metadata.MD
+
+	// clientDeadline := time.Now().Add(time.Duration(2 * time.Second))
+	// ctx, cancel := context.WithDeadline(context.Background(), clientDeadline)
+	// defer cancel()
 
 	order1 := pb.Order{Id: "11", Items: []string{"Mooer Micro Looper"}, Destination: "Balmora", Price: 45.0}
 
-	res, err := client.AddOrder(ctx, &order1)
+	res, err := client.AddOrder(ctxA, &order1, grpc.Header(&header), grpc.Trailer(&trailer))
+
 	if err != nil {
 		got := status.Code(err)
 		log.Fatalf("Error Occured -> addOrder : %v", got)
 	}
 	if res != nil {
 		log.Print("AddOrder Response -> : ", res.Value)
+	}
+
+	if t, ok := header["timestamp"]; ok {
+		log.Println("timestamp from header")
+		for i, e := range t {
+			fmt.Printf(" %d. %s\n", i, e)
+		}
+	} else {
+		log.Fatal("timestamp expected but doesn't exist in header")
+	}
+	if l, ok := header["location"]; ok {
+		log.Println("location from header")
+		for i, e := range l {
+			fmt.Printf(" %d. %s\n", i, e)
+		}
+	} else {
+		log.Fatal("location expected but doesn't exist in header")
 	}
 
 	helloClient := hwpb.NewGreeterClient(conn)
@@ -80,13 +110,13 @@ func main() {
 	// 	log.Print("AddOrder Response -> ", res.Value)
 	// }
 
-	retrievedOrder, err := client.GetOrder(ctx, &wrapperspb.StringValue{Value: "15"})
-	if err != nil {
-		log.Fatalf("cannot get order: %v", err)
-	}
-	log.Print("GetOrder Response -> : ", retrievedOrder)
+	// retrievedOrder, err := client.GetOrder(ctx, &wrapperspb.StringValue{Value: "15"})
+	// if err != nil {
+	// 	log.Fatalf("cannot get order: %v", err)
+	// }
+	// log.Print("GetOrder Response -> : ", retrievedOrder)
 
-	searchStream, err := client.SearchOrders(ctx, &wrapperspb.StringValue{Value: "Boss"})
+	searchStream, err := client.SearchOrders(ctxA, &wrapperspb.StringValue{Value: "Boss"})
 	if err != nil {
 		log.Fatalf("cannot search orders: %v", err)
 	}
@@ -105,7 +135,7 @@ func main() {
 	updOrder2 := pb.Order{Id: "14", Items: []string{"Sofa", "Table", "Chair"}, Destination: "Balmora"}
 	updOrder3 := pb.Order{Id: "16", Items: []string{"Holy Grail"}, Destination: "Erathia"}
 
-	updateStream, err := client.UpdateOrders(ctx)
+	updateStream, err := client.UpdateOrders(mdCtx)
 	if err != nil {
 		log.Fatalf("cannot update orders: %v", err)
 	}
@@ -128,7 +158,7 @@ func main() {
 
 	// cancel
 
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	streamProcOrder, err := client.ProcessOrders(ctx)
 	if err != nil {

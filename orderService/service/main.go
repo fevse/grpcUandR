@@ -9,12 +9,14 @@ import (
 	"net"
 	pb "orderService/service/orderService"
 	"strings"
+	"time"
 
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	hello_pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -75,12 +77,35 @@ func (s *server) AddOrder(ctx context.Context, order *pb.Order) (*wrapperspb.Str
 	} else {
 		orderMap[order.Id] = order
 		log.Printf("Order %v added", order.Id)
+
+		md, metadataAvailable := metadata.FromIncomingContext(ctx)
+		if !metadataAvailable {
+			return nil, status.Errorf(codes.DataLoss, "UnaryEcho: failed to get metadata")
+		}
+		if t, ok := md["timestamp"]; ok {
+			log.Println("timestamp from metadata:")
+			for i, e := range t {
+				log.Printf("===> Metadata %d. %s\n", i, e)
+			}
+		}
+
+		header := metadata.New(map[string]string{"location": "Astana", "timestamp": time.Now().Format(time.StampNano)})
+		grpc.SendHeader(ctx, header)
+
 		return &wrapperspb.StringValue{Value: "Order " + order.Id + " added"}, nil
 	}
 
 }
 
 func (s *server) SearchOrders(searchQuery *wrapperspb.StringValue, stream pb.OrderManagement_SearchOrdersServer) error {
+	defer func() {
+		trailer := metadata.Pairs("timestamp", time.Now().Format(time.StampNano))
+		stream.SetTrailer(trailer)
+	}()
+
+	header := metadata.New(map[string]string{"locataion": "Mercury", "timestamp": time.Now().Format(time.StampNano)})
+	stream.SendHeader(header)
+
 	for key, order := range orderMap {
 		// log.Printf("#%v : %v", key, order)
 		for _, itemStr := range order.Items {
@@ -90,6 +115,7 @@ func (s *server) SearchOrders(searchQuery *wrapperspb.StringValue, stream pb.Ord
 					return fmt.Errorf("error sending message to stream: %v", err)
 				}
 				log.Printf("Matching Order Found : %v", key)
+				stream.Send(order)
 				break
 			}
 		}
